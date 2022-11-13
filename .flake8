@@ -1,0 +1,4 @@
+[flake8]
+ignore = E201, E202, E203, E221, E226, E241, E251, E272, E303, E501, E701, E702, E731
+exclude = .git, __pycache__, venv
+max-complexity = 20

@@ -1,0 +1,7 @@
+setuptools>41.2.0
+numpy>=1.22.0
+pyqt5
+pyqtgraph>=0.12.1
+PyInstaller>=4.8
+flake8
+pylint
