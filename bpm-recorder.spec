@@ -8,7 +8,7 @@ a = Analysis(
     ['run.py'],
     pathex=[],
     binaries=[],
-    datas=[('stylesheet.css', 'stylesheet.css')],
+    datas=[],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

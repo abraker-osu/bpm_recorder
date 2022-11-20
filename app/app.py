@@ -1,11 +1,13 @@
-import json
 import os
 import sys
 import time
 import numpy as np
 import traceback
 
+import pyqtgraph
+
 from PyQt5 import QtCore
+from PyQt5 import QtGui
 from PyQt5 import QtWidgets
 
 
@@ -42,11 +44,26 @@ class App(QtWidgets.QMainWindow):
     IDX_TIME = 0
     IDX_KEY  = 1
 
+    # `NUM_AVG` has to be an even amount or otherwise
+    # averaged two-finger tapping data can be
+    # assymetrical.
+    # 
+    # Ex: 
+    #   odd:  [1, 0.5, 1]      -> [0.5, 1, 0.5]
+    #   even: [1, 0.5, 1, 0.5] -> [0.5, 1, 0.5, 1]
+    #
+    # Odds produce varying average as data gets shifted in
+    # and out, evens produce consistent data
+    NUM_AVG  = 10
+
     def __init__(self):
         QtWidgets.QMainWindow.__init__(self)
 
         self.pressed = set()
+
         self.is_recording = False
+        self.is_ready_to_record = False
+        
         self.start_time = None
 
         self.data_raw = []
@@ -54,28 +71,38 @@ class App(QtWidgets.QMainWindow):
 
         self.setWindowTitle('BPM Recorder')
 
-        self.bpm_display = QtWidgets.QLabel('')
+        self.bpm_display = QtWidgets.QLabel(f'Taps/s: -\nBPM:    -\n# Taps: -')
+        self.bpm_display.setStyleSheet('QLabel { font-size: 10pt; font-family: Consolas; }')
 
-        self.start_button = QtWidgets.QPushButton('Start')
-        self.start_button.clicked.connect(self.__start_recording)
-        self.start_button.setToolTip('Starts BPM recording')
+        self.graph_display = pyqtgraph.PlotWidget(title='Time vs BPM')
+        self.graph_display.getPlotItem().getAxis('left').enableAutoSIPrefix(False)
+        self.graph_display.getPlotItem().getAxis('bottom').enableAutoSIPrefix(False)
+        self.graph_display.setLabel('left', 'BPM avg 10 data points', units='BPM', unitPrefix='')
+        self.graph_display.setLabel('bottom', 'Time', units='ms', unitPrefix='')
 
-        self.stop_button = QtWidgets.QPushButton('Stop')
-        self.stop_button.clicked.connect(self.__stop_recording)
-        self.stop_button.setToolTip('Stops BPM recording')
+        self.plot = self.graph_display.plot()
 
-        self.status_text = QtWidgets.QLabel()
+        self.num_press_setting_label = QtWidgets.QLabel('Num presses to record:')
+        self.num_press_setting = QtWidgets.QLineEdit()
+
+        self.num_press_setting_label.setStyleSheet('QLabel { font-size: 10pt; }')
+        self.num_press_setting.setStyleSheet('QLabel { font-size: 10pt; }')
+        self.num_press_setting.setValidator(QtGui.QIntValidator(App.NUM_AVG, 10000, self))
+
+        self.status_text = QtWidgets.QLabel('Press ESC to prepare for a new recording')
 
         self.main_widget = QtWidgets.QWidget()
         self.setCentralWidget(self.main_widget)
 
-        self.btn__layout = QtWidgets.QHBoxLayout()
-        self.btn__layout.addWidget(self.start_button)
-        self.btn__layout.addWidget(self.stop_button)
+        self.setting__layout = QtWidgets.QHBoxLayout()
+        self.setting__layout.addWidget(self.num_press_setting_label)
+        self.setting__layout.addWidget(self.num_press_setting)
+        self.setting__layout.setContentsMargins(0, 0, 0, 10)
 
         self.main_layout = QtWidgets.QVBoxLayout(self.main_widget)
         self.main_layout.addWidget(self.bpm_display)
-        self.main_layout.addLayout(self.btn__layout)
+        self.main_layout.addWidget(self.graph_display)
+        self.main_layout.addLayout(self.setting__layout)
         self.main_layout.addWidget(self.status_text)
 
         self.show()
@@ -92,33 +119,59 @@ class App(QtWidgets.QMainWindow):
         self.data_bpm = []
 
         self.status_text.setText('Recording')
-        self.bpm_display.setText(f'0 Taps/s\n0 BPM')
+        self.bpm_display.setText(f'Taps/s: -\nBPM:    -\n# Taps: 0')
 
+
+    def __prepare_recording(self):
+        self.is_ready_to_record = True
+        self.status_text.setText('Start pressing keys to record')
+        self.num_press_setting.setEnabled(False)
+        
 
     def __stop_recording(self):
         self.is_recording = False
+        self.is_ready_to_record = False
 
-        self.status_text.setText('')
+        self.status_text.setText('Press ESC to prepare for a new recording')
+        self.num_press_setting.setEnabled(True)
+
         self.__export_data()
 
 
     def __export_data(self):
-        os.makedirs('data', exist_ok=True)
-        np.savetxt(f'data/{time.time():.0f}.csv', np.asarray(self.data_bpm), delimiter=',', fmt='%i %i %.2f %i')
+        if len(self.data_bpm) > 0:
+            os.makedirs('data', exist_ok=True)
+            np.savetxt(f'data/{time.time():.0f}.csv', np.asarray(self.data_bpm), delimiter=',', fmt='%i %i %.2f %i', header='tap, ms, bpm, key')
 
 
     def __record_data_point(self, key):
         curr_time = time.perf_counter()
         self.data_raw.append([ curr_time, key ])
+
+        num_taps = len(self.data_raw)
         
         data = np.asarray(self.data_raw)
         data = np.diff(data[:, App.IDX_TIME])
 
-        n = 10
-        avg = np.mean(data[-n:-1])
+        if num_taps < 3:
+            self.bpm_display.setText(f'Taps/s: -\nBPM:    -\n# Taps: {num_taps}')
+            return
+            
+        avg = np.mean(data[-App.NUM_AVG - 1:-1])
 
         self.data_bpm.append([ len(self.data_bpm), 1000*(curr_time - self.start_time), 15 / avg, key ])
-        self.bpm_display.setText(f'{(1 / avg):.1f} Taps/s\n{(15 / avg):.0f} BPM')
+        self.bpm_display.setText(f'Taps/s: {(1 / avg):.1f}\nBPM:    {(15 / avg):.0f}\n# Taps: {num_taps}')
+
+        data = np.asarray(self.data_bpm)
+        self.plot.setData(data[:, 1], data[:, 2], pen=(0, 255, 0, 150))
+
+        try: num_presses_to_record = int(self.num_press_setting.text())
+        except ValueError:
+            num_presses_to_record = 0
+            
+        if num_presses_to_record != 0:
+            if num_taps >= num_presses_to_record:
+                self.__stop_recording()
 
 
     def keyReleaseEvent(self, event):
@@ -128,8 +181,9 @@ class App(QtWidgets.QMainWindow):
             event.accept()
             return
 
-        if not event.isAutoRepeat():
-            self.pressed.remove(event.key())
+        if self.is_recording:
+            if not event.isAutoRepeat():
+                self.pressed.remove(event.key())
 
         event.accept()
 
@@ -138,18 +192,20 @@ class App(QtWidgets.QMainWindow):
         QtWidgets.QMainWindow.keyPressEvent(self, event)
 
         if event.key() == QtCore.Qt.Key.Key_Escape:
-            self.__stop_recording()
-            self.pressed.clear()
+            if self.is_recording:
+                self.__stop_recording()
+            else:
+                self.__prepare_recording()
+                self.__start_recording()
             
             event.accept()
             return
-
-        self.__start_recording()
-
-        if event.key() not in self.pressed:
-            self.pressed.add(event.key())
-            self.__record_data_point(event.key())
-        
+    
+        if self.is_recording:
+            if event.key() not in self.pressed:
+                self.__record_data_point(event.key())
+    
+        self.pressed.add(event.key())
         event.accept()
 
 
