@@ -89,7 +89,7 @@ class App(QtWidgets.QMainWindow):
         self.num_press_setting.setStyleSheet('QLabel { font-size: 10pt; }')
         self.num_press_setting.setValidator(QtGui.QIntValidator(App.NUM_AVG, 10000, self))
 
-        self.status_text = QtWidgets.QLabel('Press ESC to prepare for a new recording')
+        self.status_text = QtWidgets.QLabel('Click on the plot then any key  to prepare for a new recording')
 
         self.main_widget = QtWidgets.QWidget()
         self.setCentralWidget(self.main_widget)
@@ -118,7 +118,7 @@ class App(QtWidgets.QMainWindow):
         self.data_raw = []
         self.data_bpm = []
 
-        self.status_text.setText('Recording')
+        self.status_text.setText('Recording (Press Esc to stop)')
         self.bpm_display.setText(f'Taps/s: -\nBPM:    -\n# Taps: 0')
 
 
@@ -132,7 +132,7 @@ class App(QtWidgets.QMainWindow):
         self.is_recording = False
         self.is_ready_to_record = False
 
-        self.status_text.setText('Press ESC to prepare for a new recording')
+        self.status_text.setText('Click on the plot then any key to prepare for a new recording')
         self.num_press_setting.setEnabled(True)
 
         self.__export_data()
@@ -194,9 +194,9 @@ class App(QtWidgets.QMainWindow):
         if event.key() == QtCore.Qt.Key.Key_Escape:
             if self.is_recording:
                 self.__stop_recording()
-            else:
-                self.__prepare_recording()
-                self.__start_recording()
+        #     else:
+        #         self.__prepare_recording()
+        #         self.__start_recording()
             
             event.accept()
             return
@@ -204,6 +204,9 @@ class App(QtWidgets.QMainWindow):
         if self.is_recording:
             if event.key() not in self.pressed:
                 self.__record_data_point(event.key())
+        else:
+            self.__prepare_recording()
+            self.__start_recording()
     
         self.pressed.add(event.key())
         event.accept()
