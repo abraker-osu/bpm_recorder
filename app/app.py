@@ -163,7 +163,7 @@ class App(QtWidgets.QMainWindow):
         self.bpm_display.setText(f'Taps/s: {(1 / avg):.1f}\nBPM:    {(15 / avg):.0f}\n# Taps: {num_taps}')
 
         data = np.asarray(self.data_bpm)
-        self.plot.setData(data[:, 1], data[:, 2], pen=(0, 255, 0, 150))
+        self.plot.setData(data[:, 1], data[:, 2], pen=None, symbolPen=None, symbolBrush=(150, 150, 255, 200), symbolSize=4)
 
         try: num_presses_to_record = int(self.num_press_setting.text())
         except ValueError:
