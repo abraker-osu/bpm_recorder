@@ -140,8 +140,12 @@ class App(QtWidgets.QMainWindow):
 
     def __export_data(self):
         if len(self.data_bpm) > 0:
+            try: num_presses_to_record = int(self.num_press_setting.text())
+            except ValueError:
+                num_presses_to_record = 0
+
             os.makedirs('data', exist_ok=True)
-            np.savetxt(f'data/{time.time():.0f}.csv', np.asarray(self.data_bpm), delimiter=',', fmt='%i %i %.2f %i', header='tap, ms, bpm, key')
+            np.savetxt(f'data/{time.time():.0f}_{num_presses_to_record}.csv', np.asarray(self.data_bpm), delimiter=',', fmt='%i %i %.2f %i', header='tap, ms, bpm, key')
 
 
     def __record_data_point(self, key):
